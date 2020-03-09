@@ -3,6 +3,21 @@ from numpy import exp
 from numpy import power
 import numpy as np
 import matplotlib.pyplot as plt
+import math
+import time
+
+'''
+iclamp in python [[1, 1, 1]
+                  [2, 2, 2]]
+                  
+iclamp in matlab [[1, 2]
+                  [1, 2]
+                  [1, 2]]
+                  
+    
+Is iclamp continuous simulation?
+Do I have to reshape?
+'''
 
 
 def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
@@ -13,8 +28,7 @@ def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
 
     if y0.size != 22:
         y0 = [- 65, 0.001, 4.22117 * 10 ** (-5), 0.9917, 0.00264776, 0.5873, 0.1269, 0.0517, 0.5, 2.5 * 10 ** (-5),
-              7.6 * 10 ** (-5), 0.94, 0.4,
-              2.5 * 10 ** (-5), 0, 0, 0, 0, 0, 0, 0, 0]
+              7.6 * 10 ** (-5), 0.94, 0.4, 2.5 * 10 ** (-5), 0, 0, 0, 0, 0, 0, 0, 0]
 
     if gsyn.size != 0:
         if len(gsyn) < len(iclamp):
@@ -28,46 +42,51 @@ def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
     if len(gmax) == 9:
         gmax = np.append(gmax, [0])
 
-    iclamp_lin = np.reshape(iclamp, (len(iclamp), -1))
-
+    iclamp_lin = iclamp.flatten()
+    # print(iclamp_lin)
+    gsyn = gsyn.flatten()
     I = np.zeros([len(y0), len(iclamp_lin)])
+    dy = tSPN_step(y0, iclamp_lin[0], gmax, .1, gsyn[0])
 
     for index in range(0, len(iclamp_lin)):
-        dy = tSPN_step(y0, iclamp_lin[index], gmax, .1, gsyn[index])
+        dy = tSPN_step(dy, iclamp_lin[index], gmax, .1, gsyn[index])
+
         I[:, index] = dy.T
 
-    # V = reshape(I(1,:), size(iclamp));
     # I = reshape(I, length(dy), [], size(iclamp, 2));
     # I = permute(I, [2 3 1]);
 
-    print(I)
-    print(len(iclamp))
-    V = I[1, :len(iclamp)]
-    print(V)
-    return (V, I)
+    V = I[0, :]
+    # print(V)
+    # print(I)
+    # I = np.reshape(I, (len(dy) * len(iclamp), len(iclamp[0])))
+    # print(I)
+    return V, I
 
+
+'''
+Called by tSPN
+'''
 
 
 def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
-
     ## initialization
-    V = dydt[0]             # Somatic membrane voltage (mV)
-    CaS = dydt[1]           # somatic [Ca2+]
-    m = dydt[2]             # Na activation
-    h = dydt[3]             # Na inactivation
-    n = dydt[4]             # K activation
-    mA = dydt[5]            # A activation
-    hA = dydt[6]            # A inactivation
-    mh = dydt[7]            # h activation
-    mh_inf = dydt[8]        # h steady-state activation
-    mM = dydt[9]            # M activation
-    mCaL = dydt[10]          # CaL activation
-    hCaL = dydt[11]         # CaL inactivation
-    s = dydt[12]            # Na slow inactivation
-    mKCa = dydt[13]         # KCa activation
+    V = dydt[0]  # Somatic membrane voltage (mV)
+    CaS = dydt[1]  # somatic [Ca2+]
+    m = dydt[2]  # Na activation
+    h = dydt[3]  # Na inactivation
+    n = dydt[4]  # K activation
+    mA = dydt[5]  # A activation
+    hA = dydt[6]  # A inactivation
+    mh = dydt[7]  # h activation
+    mh_inf = dydt[8]  # h steady-state activation
+    mM = dydt[9]  # M activation
+    mCaL = dydt[10]  # CaL activation
+    hCaL = dydt[11]  # CaL inactivation
+    s = dydt[12]  # Na slow inactivation
+    mKCa = dydt[13]  # KCa activation
 
-
-    GNa = gmax[0]           # nS; maximum conductance of INa
+    GNa = gmax[0]  # nS; maximum conductance of INa
     GK = gmax[1]
     GCaL = gmax[2]
     GM = gmax[3]
@@ -76,28 +95,28 @@ def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
     Gh = gmax[6]
     Gleak = gmax[7]
     C = gmax[8]
-    Ginjury = gmax[9]       # added to simulate impalement injury
+    Ginjury = gmax[9]  # added to simulate impalement injury
 
-    E_Na = 60                # mV; reverse potential of INa
+    E_Na = 60  # mV; reverse potential of INa
     E_K = -90
     E_h = -31.6
     E_leak = -55
     E_syn = 0
     E_Ca = 120
-    E_injury = -15          # reversal potential for injury induced leak = solution of GHK if all permeabilities are equal
+    E_injury = -15  # reversal potential for injury induced leak = solution of GHK if all permeabilities are equal
 
-    f = 0.01                   # percent of free to bound Ca2+
-    alpha = 0.002              # uM/pA; convertion factor from current to concentration
-    kCaS = 0.024               # /ms; Ca2+ removal rate, kCaS is proportional to  1/tau_removal; 0.008 - 0.025
-    # A = 1.26e-5              % cm^2; cell surface area; radius is 10um
-    # Ca_out = 2               % mM; extracellular Ca2+ concentration
+    f = 0.01  # percent of free to bound Ca2+
+    alpha = 0.002  # uM/pA; convertion factor from current to concentration
+    kCaS = 0.024  # /ms; Ca2+ removal rate, kCaS is proportional to  1/tau_removal; 0.008 - 0.025
+    # A = 1.26e-5           # cm^2; cell surface area; radius is 10um
+    # Ca_out = 2            # mM; extracellular Ca2+ concentration
 
-    SCa = 1                    # uM; half-saturation of [Ca2+]; 25uM in Ermentrount book, 0.2uM in Kurian et al. 2011
-    tauKCa_0 = 50              # ms
-    tauh_0_act = 1             # 10, 1
-    tauh_0_inact = 1           # 10, 5         % ms; vary from 50ms to 1000ms
+    SCa = 1  # uM; half-saturation of [Ca2+]; 25uM in Ermentrount book, 0.2uM in Kurian et al. 2011
+    tauKCa_0 = 50  # ms
+    tauh_0_act = 1  # 10, 1
+    tauh_0_inact = 1  # 10, 5         % ms; vary from 50ms to 1000ms
     tau_mA_scale = 1
-    tau_hA_scale = 10         # scaling factor for tau_hA
+    tau_hA_scale = 10  # scaling factor for tau_hA
 
     ## update dydt
     # Sodium current (pA), Wheeler & Horn 2004 or Yamada et al., 1989
@@ -165,7 +184,7 @@ def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
     I_KCa = gKCa * (V - E_K)
 
     # A-type potassium current (pA), Rush & Rinzel, 1995
-    mA_inf = (0.0761 * exp((V + 94.22) / 31.84) / (1 + exp((V + 1.17) / 28.93))) ** (1/3)
+    mA_inf = (0.0761 * exp((V + 94.22) / 31.84) / (1 + exp((V + 1.17) / 28.93))) ** (1 / 3)
     tau_mA = 0.3632 + 1.158 / (1 + exp((V + 55.96) / 20.12))
     mA_next = mA_inf + (mA - mA_inf) * exp(-dt / tau_mA) if dt < tau_mA else mA_inf
 
@@ -181,9 +200,9 @@ def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
     tau_mh_activ = tauh_0_act * 53.5 + 67.7 * exp(-(V + 120) / 22.4)
     tau_mh_deactiv = tauh_0_inact * 40.9 - 0.45 * V
     tau_mh = tau_mh_activ if mh_inf_next > mh_inf else tau_mh_deactiv
-    mh_next = mh + (dt * (mh_inf_next-mh)/tau_mh) if dt<tau_mh else mh_inf_next
+    mh_next = mh + (dt * (mh_inf_next - mh) / tau_mh) if dt < tau_mh else mh_inf_next
     gh = Gh * mh_next
-    I_h = gh * (V - E_h)
+    I_h = gh * mh * (V - E_h)
 
     # Leak current (pA)
     I_leak = Gleak * (V - E_leak)
@@ -200,12 +219,14 @@ def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
 
     ## update voltage
     g_inf = gNa + gCaL + gK + gA + gM + gKCa + gh + Gleak + Gsyn + Ginjury
-    V_inf = (int(iclamp) + gNa * E_Na + gCaL * E_Ca + (gK + gA + gM + gKCa) * E_K + gh * E_h + Gleak * E_leak + Ginjury * E_injury + Gsyn * E_syn) / g_inf
+    V_inf = (int(iclamp) + gNa * E_Na + gCaL * E_Ca + (
+                gK + gA + gM + gKCa) * E_K + gh * E_h + Gleak * E_leak + Ginjury * E_injury + Gsyn * E_syn) / g_inf
     tau_tspn = C / g_inf
     V_next = V_inf + (V - V_inf) * exp(-dt / tau_tspn)
 
-    dy = [V_next, CaS_next, m_next, h_next, n_next, mA_next, hA_next, mh_next, mM_next, mCaL_next, hCaL_next, s_next, mKCa_next, I_Na, I_K,
-          I_CaL, I_M, I_KCa, I_A, I_h, I_leak, mh_inf_next]
+    dy = [V_next, CaS_next, m_next, h_next, n_next, mA_next, hA_next, mh_next, mh_inf_next, mM_next, mCaL_next,
+          hCaL_next, s_next, mKCa_next, I_Na, I_K,
+          I_CaL, I_M, I_KCa, I_A, I_h, I_leak]
 
     dy = np.array(dy)
 
@@ -220,23 +241,24 @@ def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
 
 %   gsyn: synaptic conductance in nS
 '''
-def tSPN_gsyn(event_time: [], event_scale: []):
 
+
+def tSPN_gsyn(event_time: [], event_scale: []):
     dt = 0.1
-    event_index = [round(t/dt) for t in event_time]
+    event_index = [round(t / dt) for t in event_time]
     tau_rise = 1
     tau_decay = 15
-    t = np.arange(0, 200+dt, dt)
-    gsyn = np.zeros(max(event_index)+len(t))
-    e_tau_decay = [exp(-i/tau_decay) for i in t]
-    e_tau_rise = [exp(-i/tau_rise) for i in t]
+    t = np.arange(0, 200 + dt, dt)
+    gsyn = np.zeros(max(event_index) + len(t))
+    e_tau_decay = [exp(-i / tau_decay) for i in t]
+    e_tau_rise = [exp(-i / tau_rise) for i in t]
     gEPSC = [a - b for a, b in zip(e_tau_decay, e_tau_rise)]
-    gEPSC = [item/max(gEPSC) for item in gEPSC]
+    gEPSC = [item / max(gEPSC) for item in gEPSC]
 
     temp = 0
     for index in range(len(event_time)):
-        gEPSC_temp = [item*event_scale[index] for item in gEPSC]
-        gsyn[event_index[index]:len(t)+event_index[index]] += gEPSC_temp
+        gEPSC_temp = [item * event_scale[index] for item in gEPSC]
+        gsyn[event_index[index]:len(t) + event_index[index]] += gEPSC_temp
     print(gsyn)
     return gsyn
 
@@ -260,15 +282,85 @@ def tSPN_gsyn(event_time: [], event_scale: []):
 %   y0: value of all parameters at the end of the simulation. Can be used as
 %   the initial value for subsequent simulations. Useful for reducing
 %   initialization time. 
+
+The code is kinda slow compared to matlab version
 '''
-def tSPN_ihold(gmax: [],vhold,bounds):
-    return
+
+
+def tSPN_ihold(gmax: [], vhold, bounds: []):
+    gmax = np.array(gmax)
+    bounds = np.array(bounds)
+
+    if bounds.size is 2:
+        i_lb = min(bounds)
+        i_ub = max(bounds)
+    else:
+        i_lb = -100
+        i_ub = 100
+
+    n_reps = round(math.log(i_ub - i_lb, 2))
+    y0 = []
+
+    for index in range(n_reps):
+        ihold = (i_ub + i_lb) / 2
+        iclamp = np.array([ihold] * 10000)
+        V, I = tSPN(gmax, iclamp, y0, [])
+
+        is_firing = max(V) > 0
+
+        if is_firing or V[-1] > vhold:
+            i_ub = ihold
+        else:
+            i_lb = ihold
+            y0 = I[:, -1]
+
+    return ihold, y0
+
+
+'''
+% This code calculates the input conductance of a model cell. 
+
+% gmax: vector of parameters for a specific model cell in the following
+%  order: [GNa GK GCaL GM GKCa GA GH GLeak Cm GImp] (GImp is optional, default is 0)
+%  Conductance is measured in nS, capacitance is measured in pF. 
+%
+% ihold: current required to hold the given model cell at the specified
+%  holding voltage. May be obtained from tSPN_ihold.
+%
+% y0: value of all parameters at the end of the simulation. Can be used as
+%  the initial value for subsequent simulations. Useful for reducing
+%  initialization time. May be obtained from tSPN_ihold.
+
+% gin: calculated input conductance of the model cell in nS. 
+
+not producing same output as matlab
+'''
+
+
+def tSPN_gin(gmax: [], ihold, y0):
+    itest = -5
+    iclamp = np.array([ihold] * 100000)
+    iclamp[50000:-1] = ihold + itest
+
+    V, I = tSPN(gmax, iclamp, y0, [])
+    del_V = min(V[50000:-1]) - V[49999]
+
+    gin = itest / del_V
+    return gin
+
+
+def tSPN_synThresh():
+    return .4344, -50, -40, [300, 2000, 0, 0, 0, 0, .4344, 100]
+
 
 if __name__ == "__main__":
-    # gmax = [1] * 9
-    # iclamp = [1]*10
-    # y0 = []
-    # gsyn = []
+    gmax = [1] * 9
+    # iclamp = [[1, 1, 1], [2, 2, 2]]
+    # iclamp = [1, 1, 1, 1, 1]
+    y0 = []
+    gsyn = []
     # tSPN(gmax, iclamp, y0, gsyn)
-    plt.plot(tSPN_gsyn([1, 2, 3], [1, 2, 3]))
-    plt.show()
+    # plt.plot(tSPN_gsyn([1, 2, 3], [1, 2, 3]))
+    # plt.show()
+    # tSPN_ihold([1, 1, 1, 1, 1, 1, 1, 1, 1],-20, [])
+    tSPN_gin(gmax, -30, [])
