@@ -21,14 +21,14 @@ Do I have to reshape?
 
 
 def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
-    gmax = np.array(gmax)
-    iclamp = np.array(iclamp)
-    y0 = np.array(y0)
-    gsyn = np.array(gsyn)
+    gmax = np.array(gmax, dtype=np.float)
+    iclamp = np.array(iclamp, dtype=np.float)
+    y0 = np.array(y0, dtype=np.float)
+    gsyn = np.array(gsyn, dtype=np.float)
 
     if y0.size != 22:
-        y0 = [- 65, 0.001, 4.22117 * 10 ** (-5), 0.9917, 0.00264776, 0.5873, 0.1269, 0.0517, 0.5, 2.5 * 10 ** (-5),
-              7.6 * 10 ** (-5), 0.94, 0.4, 2.5 * 10 ** (-5), 0, 0, 0, 0, 0, 0, 0, 0]
+        y0 = np.array([- 65, 0.001, 4.22117 * 10 ** (-5), 0.9917, 0.00264776, 0.5873, 0.1269, 0.0517, 0.5, 2.5 * 10 ** (-5),
+              7.6 * 10 ** (-5), 0.94, 0.4, 2.5 * 10 ** (-5), 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float)
 
     if gsyn.size != 0:
         if len(gsyn) < len(iclamp):
@@ -43,22 +43,18 @@ def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
         gmax = np.append(gmax, [0])
 
     iclamp_lin = iclamp.flatten()
-    # print(iclamp_lin)
     gsyn = gsyn.flatten()
     I = np.zeros([len(y0), len(iclamp_lin)])
     dy = tSPN_step(y0, iclamp_lin[0], gmax, .1, gsyn[0])
 
     for index in range(0, len(iclamp_lin)):
         dy = tSPN_step(dy, iclamp_lin[index], gmax, .1, gsyn[index])
-
         I[:, index] = dy.T
 
     # I = reshape(I, length(dy), [], size(iclamp, 2));
     # I = permute(I, [2 3 1]);
 
     V = I[0, :]
-    # print(V)
-    # print(I)
     # I = np.reshape(I, (len(dy) * len(iclamp), len(iclamp[0])))
     # print(I)
     return V, I
@@ -354,12 +350,13 @@ def tSPN_synThresh():
 
 
 if __name__ == "__main__":
-    gmax = [1] * 9
-    # iclamp = [[1, 1, 1], [2, 2, 2]]
+    gmax = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    iclamp = [[1, 1, 1], [2, 2, 2]]
     # iclamp = [1, 1, 1, 1, 1]
     y0 = []
     gsyn = []
-    # tSPN(gmax, iclamp, y0, gsyn)
+    V, I = tSPN(gmax, iclamp, y0, gsyn)
+    print(I)
     # plt.plot(tSPN_gsyn([1, 2, 3], [1, 2, 3]))
     # plt.show()
     # tSPN_ihold([1, 1, 1, 1, 1, 1, 1, 1, 1],-20, [])
