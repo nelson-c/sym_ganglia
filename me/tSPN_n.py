@@ -224,14 +224,9 @@ def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
 
     gh = Gh * mh_next
     I_h = gh * mh * (V - E_h)
-
-
     I_leak = Gleak * (V - E_leak)
-
     I_injury = Ginjury * (V - E_injury)
-
     I_leak = I_leak + I_injury
-
     I_syn = Gsyn * (V - E_syn)
 
     CaS_next = CaS * exp(-f * kCaS * dt) - alpha / kCaS * I_CaL * (1 - exp(-f * kCaS * dt))
