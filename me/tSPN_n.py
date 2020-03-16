@@ -343,8 +343,6 @@ def tSPN_ihold(gmax: [], vhold, bounds: []):
 %  initialization time. May be obtained from tSPN_ihold.
 
 % gin: calculated input conductance of the model cell in nS. 
-
-not producing same output as matlab
 '''
 
 
