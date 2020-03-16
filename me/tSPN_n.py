@@ -47,12 +47,10 @@ def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
         dy = tSPN_step(dy, iclamp_lin[index], gmax, .1, gsyn[index])
         I[:, index] = dy.T
 
-    # I = reshape(I, length(dy), [], size(iclamp, 2));
-    # I = permute(I, [2 3 1]);
 
     V = I[0, :]
-    # I = np.reshape(I, [len(dy), len(iclamp), len(iclamp[0])], order='F')
-    # I = np.transpose(I, (1, 2, 0))
+    I = np.reshape(I, [len(dy), len(iclamp), len(iclamp[0])], order='F')
+    I = np.transpose(I, (1, 2, 0))
     return V, I
 
 
@@ -376,9 +374,9 @@ if __name__ == "__main__":
     iclamp = [[1, 2, 3], [1, 2, 3]]
     y0 = []
     gsyn = []
-    V, I = tSPN(gmax, [[92.12]*10000], y0, gsyn)
-    print(I)
+    # V, I = tSPN(gmax, [[92.12]*10000], y0, gsyn)
     # plt.plot(tSPN_gsyn([1, 2, 3], [1, 2, 3]))
     # plt.show()
-    # ihold, y0 = tSPN_ihold(gmax, -20, [])
+    ihold, y0 = tSPN_ihold(gmax, -20, [])
+    print(ihold)
     # tSPN_gin(gmax, -30, [])
