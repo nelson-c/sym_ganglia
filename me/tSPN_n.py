@@ -7,14 +7,9 @@ import math
 import time
 
 '''
-iclamp in python [[1, 1, 1]
-                  [2, 2, 2]]
                   
-iclamp in matlab [[1, 2]
-                  [1, 2]
-                  [1, 2]]
-                  
-    
+iclamp_lin = 'F'
+
 Is iclamp continuous simulation?
 Do I have to reshape?
 '''
@@ -42,10 +37,11 @@ def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
     if len(gmax) == 9:
         gmax = np.append(gmax, [0])
 
-    iclamp_lin = iclamp.flatten()
-    gsyn = gsyn.flatten()
+    iclamp_lin = iclamp.flatten('F')
+    gsyn = gsyn.flatten('F')
     I = np.zeros([len(y0), len(iclamp_lin)])
     dy = tSPN_step(y0, iclamp_lin[0], gmax, .1, gsyn[0])
+
 
     for index in range(0, len(iclamp_lin)):
         dy = tSPN_step(dy, iclamp_lin[index], gmax, .1, gsyn[index])
@@ -55,8 +51,8 @@ def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
     # I = permute(I, [2 3 1]);
 
     V = I[0, :]
-    # I = np.reshape(I, (len(dy) * len(iclamp), len(iclamp[0])))
-    # print(I)
+    I = np.reshape(I, [len(dy), len(iclamp), len(iclamp[0])], order='F')
+    I = np.transpose(I, (1, 2, 0))
     return V, I
 
 
@@ -215,14 +211,14 @@ def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
 
     ## update voltage
     g_inf = gNa + gCaL + gK + gA + gM + gKCa + gh + Gleak + Gsyn + Ginjury
-    V_inf = (int(iclamp) + gNa * E_Na + gCaL * E_Ca + (
+    V_inf = (iclamp + gNa * E_Na + gCaL * E_Ca + (
                 gK + gA + gM + gKCa) * E_K + gh * E_h + Gleak * E_leak + Ginjury * E_injury + Gsyn * E_syn) / g_inf
     tau_tspn = C / g_inf
     V_next = V_inf + (V - V_inf) * exp(-dt / tau_tspn)
 
+
     dy = [V_next, CaS_next, m_next, h_next, n_next, mA_next, hA_next, mh_next, mh_inf_next, mM_next, mCaL_next,
-          hCaL_next, s_next, mKCa_next, I_Na, I_K,
-          I_CaL, I_M, I_KCa, I_A, I_h, I_leak]
+          hCaL_next, s_next, mKCa_next, I_Na, I_K, I_CaL, I_M, I_KCa, I_A, I_h, I_leak]
 
     dy = np.array(dy)
 
@@ -280,6 +276,7 @@ def tSPN_gsyn(event_time: [], event_scale: []):
 %   initialization time. 
 
 The code is kinda slow compared to matlab version
+y0 is different
 '''
 
 
@@ -299,7 +296,7 @@ def tSPN_ihold(gmax: [], vhold, bounds: []):
 
     for index in range(n_reps):
         ihold = (i_ub + i_lb) / 2
-        iclamp = np.array([ihold] * 10000)
+        iclamp = np.array([[ihold] * 10000])
         V, I = tSPN(gmax, iclamp, y0, [])
 
         is_firing = max(V) > 0
@@ -308,8 +305,7 @@ def tSPN_ihold(gmax: [], vhold, bounds: []):
             i_ub = ihold
         else:
             i_lb = ihold
-            y0 = I[:, -1]
-
+            y0 = I[-1, -1, :]
     return ihold, y0
 
 
@@ -351,13 +347,12 @@ def tSPN_synThresh():
 
 if __name__ == "__main__":
     gmax = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-    iclamp = [[1, 1, 1], [2, 2, 2]]
-    # iclamp = [1, 1, 1, 1, 1]
+    iclamp = [[1, 2, 3], [1, 2, 3]]
     y0 = []
     gsyn = []
-    V, I = tSPN(gmax, iclamp, y0, gsyn)
+    V, I = tSPN(gmax, [[92.12]*5000], y0, gsyn)
     print(I)
     # plt.plot(tSPN_gsyn([1, 2, 3], [1, 2, 3]))
     # plt.show()
-    # tSPN_ihold([1, 1, 1, 1, 1, 1, 1, 1, 1],-20, [])
-    tSPN_gin(gmax, -30, [])
+    # ihold, y0 = tSPN_ihold(gmax, -20, [])
+    # tSPN_gin(gmax, -30, [])
