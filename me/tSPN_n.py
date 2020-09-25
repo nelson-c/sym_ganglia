@@ -3,15 +3,51 @@ from numpy import exp
 from numpy import power
 import numpy as np
 import matplotlib.pyplot as plt
+import numpy.matlib
 import math
 import time
 
 '''
-                  
-iclamp_lin = 'F'
+% This code runs the model cell simulation.
 
-Is iclamp continuous simulation?
-Do I have to reshape?
+% gmax: vector of parameters for a specific model cell in the following
+%  order: [GNa GK GCaL GM GKCa GA GH GLeak Cm GImp] (GImp is optional, default is 0)
+%  Conductance is measured in nS, capacitance is measured in pF. 
+%
+% iclamp: Vector or 2D matrix of injected current in pA. iclamp is linearized 
+%  and outputs are reshaped to match iclamp dimensions. Time step is 0.1ms.
+%
+% y0: (optional) vector of initial values for the simulation in the
+%  following order
+%     V
+%     [Ca2+]
+%     m
+%     h
+%     n
+%     mA
+%     hA
+%     mh
+%     mh_inf 
+%     mM
+%     mCaL
+%     hCaL
+%     s
+%     mKCa
+%     INa
+%     IK
+%     ICaL
+%     IM
+%     IKCa
+%     IA
+%     Ih
+%     Ileak
+%
+% gsyn: (optional) vector of synaptic conductance in nS. 
+
+% V: voltage trace of cellular response to injected current.
+%
+% I: matrix of additional parameters as they change over time. Same order
+%  as y0.
 '''
 
 
@@ -22,8 +58,9 @@ def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
     gsyn = np.array(gsyn, dtype=np.float)
 
     if y0.size != 22:
-        y0 = np.array([-65, 0.001, 4.22117 * 10 ** (-5), 0.9917, 0.00264776, 0.5873, 0.1269, 0.0517, 0.5, 2.5 * 10 ** (-5),
-              7.6 * 10 ** (-5), 0.94, 0.4, 2.5 * 10 ** (-5), 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float)
+        y0 = np.array(
+            [-65, 0.001, 4.22117 * 10 ** (-5), 0.9917, 0.00264776, 0.5873, 0.1269, 0.0517, 0.5, 2.5 * 10 ** (-5),
+             7.6 * 10 ** (-5), 0.94, 0.4, 2.5 * 10 ** (-5), 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float)
 
     if gsyn.size != 0:
         if len(gsyn) < len(iclamp):
@@ -42,11 +79,9 @@ def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
     I = np.zeros([len(y0), len(iclamp_lin)])
     dy = tSPN_step(y0, iclamp_lin[0], gmax, .1, gsyn[0])
 
-
     for index in range(0, len(iclamp_lin)):
         dy = tSPN_step(dy, iclamp_lin[index], gmax, .1, gsyn[index])
         I[:, index] = dy.T
-
 
     V = I[0, :]
     I = np.reshape(I, [len(dy), len(iclamp), len(iclamp[0])], order='F')
@@ -57,6 +92,8 @@ def tSPN(gmax: [], iclamp: [], y0: [], gsyn):
 '''
 Called by tSPN
 '''
+
+
 def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
     V = dydt[0]  # Somatic membrane voltage (mV)
     CaS = dydt[1]  # somatic [Ca2+]
@@ -131,7 +168,6 @@ def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
         s_next = s_inf + (s - s_inf) * exp(-dt / tau_s)
     else:
         s_next = s_inf
-
 
     gNa = GNa * power(m_next, 2) * h_next
     I_Na = gNa * (V - E_Na)
@@ -208,19 +244,16 @@ def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
     gA = GA * power(mA_next, 3) * hA_next
     I_A = gA * (V - E_K)
 
-
     mh_inf_next = 1 / (1 + exp((V + 87.6) / 11.7))
     if mh_inf_next > mh_inf:
         tau_mh = tauh_0_act * (53.5 + 67.7 * exp((V + 120) / 22.4))
     else:
         tau_mh = tauh_0_inact * (40.9 - 0.45 * V)
 
-
     if dt < tau_mh:
         mh_next = mh + (dt * (mh_inf_next - mh) / tau_mh)
     else:
         mh_next = mh_inf_next
-
 
     gh = Gh * mh_next
     I_h = gh * mh * (V - E_h)
@@ -233,10 +266,9 @@ def tSPN_step(dydt, iclamp, gmax, dt, Gsyn):
 
     g_inf = gNa + gCaL + gK + gA + gM + gKCa + gh + Gleak + Gsyn + Ginjury
     V_inf = (iclamp + gNa * E_Na + gCaL * E_Ca + (
-                gK + gA + gM + gKCa) * E_K + gh * E_h + Gleak * E_leak + Ginjury * E_injury + Gsyn * E_syn) / g_inf
+            gK + gA + gM + gKCa) * E_K + gh * E_h + Gleak * E_leak + Ginjury * E_injury + Gsyn * E_syn) / g_inf
     tau_tspn = C / g_inf
     V_next = V_inf + (V - V_inf) * exp(-dt / tau_tspn)
-
 
     dy = [V_next, CaS_next, m_next, h_next, n_next, mA_next, hA_next, mh_next, mh_inf_next, mM_next, mCaL_next,
           hCaL_next, s_next, mKCa_next, I_Na, I_K, I_CaL, I_M, I_KCa, I_A, I_h, I_leak]
@@ -260,7 +292,7 @@ def tSPN_gsyn(event_time: [], event_scale: []):
     tau_rise = 1
     tau_decay = 15
     t = np.arange(0, 200 + dt, dt)
-    gsyn = np.zeros(max(event_index) + len(t))
+    gsyn = np.zeros(int(max(event_index)) + len(t))
     e_tau_decay = [exp(-i / tau_decay) for i in t]
     e_tau_rise = [exp(-i / tau_rise) for i in t]
     gEPSC = [a - b for a, b in zip(e_tau_decay, e_tau_rise)]
@@ -269,8 +301,7 @@ def tSPN_gsyn(event_time: [], event_scale: []):
     temp = 0
     for index in range(len(event_time)):
         gEPSC_temp = [item * event_scale[index] for item in gEPSC]
-        gsyn[event_index[index]:len(t) + event_index[index]] += gEPSC_temp
-    print(gsyn)
+        gsyn[int(event_index[index]):len(t) + int(event_index[index])] += gEPSC_temp
     return gsyn
 
 
@@ -315,7 +346,7 @@ def tSPN_ihold(gmax: [], vhold, bounds: []):
 
     for index in range(n_reps):
         ihold = (i_ub + i_lb) / 2
-        iclamp = np.array([[ihold] * 10000])
+        iclamp = np.array([[ihold] * 10000], dtype='float')
         V, I = tSPN(gmax, iclamp, y0, [])
 
         is_firing = max(V) > 0
@@ -324,7 +355,7 @@ def tSPN_ihold(gmax: [], vhold, bounds: []):
             i_ub = ihold
         else:
             i_lb = ihold
-            y0 = I[-1, -1, :]
+            y0 = I[-1, 0, :]
     return ihold, y0
 
 
@@ -348,10 +379,10 @@ def tSPN_ihold(gmax: [], vhold, bounds: []):
 
 def tSPN_gin(gmax: [], ihold, y0):
     itest = -5
-    iclamp = np.array([ihold] * 100000)
+    iclamp = np.array([ihold] * 100000, dtype='float')
     iclamp[50000:-1] = ihold + itest
 
-    V, I = tSPN(gmax, iclamp, y0, [])
+    V, I = tSPN(gmax, [iclamp], y0, [])
     del_V = min(V[50000:-1]) - V[49999]
 
     gin = itest / del_V
@@ -362,14 +393,252 @@ def tSPN_synThresh():
     return .4344, -50, -40, [300, 2000, 0, 0, 0, 0, .4344, 100]
 
 
+'''
+%this code calculates the rheobase current magnitude
+
+% gmax: vector of parameters for a specific model cell in the following
+%  order: [GNa GK GCaL GM GKCa GA GH GLeak Cm GImp] (GImp is optional, default is 0)
+%  Conductance is measured in nS, capacitance is measured in pF. 
+%
+% ihold: current required to hold the given model cell at the specified
+%  holding voltage. May be obtained from tSPN_ihold.
+%
+% y0: value of all parameters at the end of the simulation. Can be used as
+%  the initial value for subsequent simulations. Useful for reducing
+%  initialization time. May be obtained from tSPN_ihold.
+
+% irheo: minimal current required to produce a single action potential, i.e. rheobase (pA).
+'''
+
+
+def tSPN_rheo(gmax, ihold, y0):
+    i_ub = 1000.
+    i_lb = 0.
+
+    sth = 0
+    tol = .1
+
+    n_iters = round(math.log((i_ub - i_lb) / tol, 2))
+
+    for index in range(n_iters):
+        iclamp = np.array([ihold] * 5000, dtype='float')
+        iclamp[100:-1] = ihold + (i_ub + i_lb) / 2
+        V, I = tSPN(gmax, [iclamp], y0, [])
+
+        isfiring = max(V) > sth
+
+        if isfiring:
+            irheo = i_ub
+            i_ub = float((i_ub + i_lb) / 2)
+        else:
+            i_lb = float((i_ub + i_lb) / 2)
+    return irheo
+
+
+def tSPN_network():
+    # freqs = 10. ^ linspace(-2, 2, 100);
+    freqs = np.array([.1, 1, 10, 100])
+    synaptic_gain = np.array([0] * len(freqs))
+
+    # Define an MxN matrix. M = postganglionic neurons. N = preganglionic neurons.
+
+    for index in range(len(freqs)):
+        # 1 postganglionic, 5 preganglionics
+        net = np.array([[10, 3, 3, 3, 3]])
+
+        postN = net.shape[0]
+        preN = net.shape[1]
+
+        # For each preganglionic, generate a vector of spike times pulled from a
+        # given distribution.
+
+        dt = .1  # .1ms sampling interval
+        HR = 10  # HR = 10Hz
+        # f = .1 #fR = 1Hz
+        f = freqs[index]
+
+        n_samples = 1000 / HR / dt  # samples per cardiac cycle
+
+        t = np.arange(n_samples) * dt  # ms
+
+        # pdf_type = 'tri'
+        # pdf_type = 'uni'
+        pdf_type = 'duty'  # duty cycle
+        # pdf_type = 'sin'
+        # pdf_type = 'wrap'  #??
+
+        if pdf_type is 'tri':
+            pdf = t
+        if pdf_type is 'uni':
+            pdf = np.ones(int(n_samples))
+        if pdf_type is 'duty':
+            dc = 0.2
+            pdf = np.zeros(int(n_samples))
+            pdf[:int(dc * len(pdf))] = 1
+        if pdf_type is 'sin':
+            pdf = -(np.cos(2 * np.pi * HR * t / 1000)) + 1
+
+        ## pdf starts at 0, matlab starts at non-0
+        pdf = pdf / sum(pdf) * f / HR
+        n_cycles = 1000
+
+        cont_pdf = np.matlib.repmat(pdf, 1, n_cycles)
+        cont_t = np.matlib.repmat(t, 1, n_cycles)
+
+        pre_event_time = [None] * preN
+        for i in range(preN):
+            mcs = np.random.random_sample(cont_pdf.size)
+            pre_event_time[i] = np.asarray(np.where(mcs < cont_pdf[0])) * dt
+
+        # For each postganglionic, generate a waveform of synaptic conductance based
+        # on preganglionic firing and network connectivity matrix, run the simulation
+        # with given synaptic waveform and detect spikes
+
+        gmax = np.array([400, 2000, 1.2, 10, 10, 10, 1, 1, 100])  # for now, assume uniform population
+        iclamp = np.array([0] * 10000, dtype='float')
+
+        y0 = None
+        V, I = tSPN(gmax, [iclamp], y0, [])
+        y0 = I[-1, -1, :]
+        iclamp = np.array([0] * n_cycles * int(n_samples), dtype='float')
+
+        post_event_time = [None] * postN
+        for i in range(postN):
+            gsyn_tot = np.array([0.] * (len(iclamp) + 2001))  # 2001?
+            syn_weights = net[i, :]
+            for j in range(preN):
+                if syn_weights[j] > 0:
+                    event_time = pre_event_time[j].ravel()
+                    event_scale = np.array([syn_weights[j]] * len(event_time))
+                    gsyn = tSPN_gsyn(event_time, event_scale)
+                    gsyn_tot[: len(gsyn)] += gsyn
+            V, I = tSPN(gmax, [iclamp], y0, [gsyn_tot])
+            post_event_time[i] = np.asarray(np.where(np.diff(V > 0) == 1)) * dt
+
+            plt.subplot(211)
+            plt.plot(V)
+            plt.subplot(212)
+            plt.plot(gsyn_tot)
+        plt.show()
+        events = pre_event_time[0]
+        plt.plot(np.remainder(events, 1000 / HR), np.zeros(len(events)), 'b*')
+        events = post_event_time[0]
+        plt.plot(np.remainder(events, 1000 / HR), np.zeros(len(events)) + 1, 'r*')
+        plt.show()
+
+        sV = V + 100
+        plt.plot(sV * np.sin(cont_t * 2 * np.pi / 100)[0], sV * np.cos(cont_t * 2 * np.pi / 100)[0])
+        plt.plot(pdf * max(sV) / max(pdf) * np.sin(t * 2 * np.pi / 100),
+                 pdf * max(sV) / max(pdf) * np.cos(t * 2 * np.pi / 100), 'r')
+        plt.show()
+
+        f1 = len(pre_event_time[0][0]) / (n_cycles / HR)
+        n = 0
+        for i in range(len(pre_event_time)):
+            n += len(pre_event_time[i])
+
+        fm = float(n / len(pre_event_time) / (n_cycles / HR))
+        fp = float(len(post_event_time[0][0]) / (n_cycles / HR))
+
+        synaptic_gain[index] = float(fp / f1)
+        print(fp, f1)
+
+    plt.semilogx(freqs, synaptic_gain)
+    plt.show()
+    plt.plot(freqs, synaptic_gain * freqs)
+    plt.show()
+
+
+def tSPN_synapticGain():
+    freqs = np.array([.1, 1, 10, 100])
+    ###Synaptic Gain, CVC vs MVC
+    ###Calculate the synaptic gain for a cutaneous vasoconstrictor (uniform
+    ###probability distribution, setup.pdf_type = 'uni') versus a muscle
+    ###vasoconstrictor (sinusoidally distributed pdf, setup.pdf_type = 'sin').
+    ###Calculate the synaptic gain at frequencies ranging from 10^-2 (.01H) to
+
+    setup = defaultSetup()
+    for i in range(len(freqs)):
+        setup.freq = freqs[i]
+        out = tSPN_net(setup)
+
+
+class defaultSetup:
+    def __init__(self):
+        self.duration = 100  # 100s simulation
+        self.net = np.array([10, 3, 3, 3, 3])  # 1 primary input, 4 secondary inputs
+        self.freq = 1  # target firing rate
+        self.HR = 10  # heart rate
+        self.dt = .1  # sampling interval
+        self.pdf_type = 'uni'  # uniform firing probability
+        self.gmax = np.array([400, 2000, 1.2, 10, 10, 10, 1, 1, 100])  # default gmax
+        self.thresh = 0
+        self.ihold = 0
+        self.tol = .01
+
+
+def tSPN_net(setup):
+    setup.n_cycles = setup.duration * setup.HR
+    setup.n_samples = 1000 / setup.HR / setup.dt
+    setup.iclamp = np.array([setup.ihold] * setup.n_cycles * setup.n_samples, dtype='float')
+
+    event_time = spikeTrain(setup)
+    setup.pre_event_time = event_time
+
+    gsyn_tot = calcGsyn(setup)
+    setup.gsyn_tot = gsyn_tot
+
+    V_tot = runSim(setup)
+    setup.V_tot = V_tot
+
+    event_time = spikeDetect(setup)
+    setup.post_event_time = event_time
+
+
+def spikeTrain(setup):
+    pdf_type = setup.pdf_type
+    freq = setup.freq
+    HR = setup.HR
+    n_cycles = setup.n_cycles
+    net = setup.net
+    dt = setup.dt
+    n_samples = setup.n_samples
+
+    t = np.arange(n_samples) * dt
+
+    # pdf_type = 'tri'
+    # pdf_type = 'uni'
+    pdf_type = 'duty'  # duty cycle
+    # pdf_type = 'sin'
+    # pdf_type = 'wrap'  #??
+
+    if pdf_type is 'tri':
+        pdf = t
+    if pdf_type is 'uni':
+        pdf = np.ones(int(n_samples))
+    if pdf_type is 'duty':
+        dc = 0.2
+        pdf = np.zeros(int(n_samples))
+        pdf[:int(dc * len(pdf))] = 1
+    if pdf_type is 'sin':
+        pdf = -(np.cos(2 * np.pi * HR * t / 1000)) + 1
+
+
 if __name__ == "__main__":
-    gmax = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-    iclamp = [[1, 2, 3], [1, 2, 3]]
-    y0 = []
+    gmax = np.array([400, 3000, 1.2, 40, 60, 80, 1, 2, 100])
+    ihold, y0 = tSPN_ihold(gmax, -70, np.array([-100,100]))
+    iclamp = np.array([ihold] * 50000, dtype='float')
+    iclamp[10000:40000]+=50
+    # y0 = []
     gsyn = []
-    # V, I = tSPN(gmax, [[92.12]*10000], y0, gsyn)
+    V, I = tSPN(gmax, [iclamp], y0, gsyn)
+    plt.plot(V)
+    plt.show()
+    # print(I)
     # plt.plot(tSPN_gsyn([1, 2, 3], [1, 2, 3]))
     # plt.show()
-    ihold, y0 = tSPN_ihold(gmax, -20, [])
-    print(ihold)
-    # tSPN_gin(gmax, -30, [])
+    # ihold, y0 = tSPN_ihold(gmax, -20., [])
+    # print(tSPN_gin(gmax, -30., []))
+    # print(tSPN_rheo(gmax, -30, []))
+    # tSPN_network()
+    # tSPN_synapticGain()
